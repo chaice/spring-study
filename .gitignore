@@ -1,0 +1,9 @@
+# Created by .ignore support plugin (hsz.mobi)
+/.idea/
+
+*.iml
+/target/
+/web/WEB-INF/lib/
+/web/WEB-INF/classes/
+/web/tempDir/
+/src/main/java/hibernate.cfg.xml

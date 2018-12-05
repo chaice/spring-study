@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/mvc
+       http://www.springframework.org/schema/mvc/spring-mvc.xsd
+       http://www.springframework.org/schema/context
+       http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- 注解驱动 -->
+    <mvc:annotation-driven content-negotiation-manager="contentNegotiationManager">
+        <mvc:message-converters register-defaults="false">
+            <bean class="org.springframework.http.converter.StringHttpMessageConverter"/>
+            <bean class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter">
+                <property name="prettyPrint" value="true"></property>
+                <property name="objectMapper">
+                    <bean id="objectMapper" class="com.fasterxml.jackson.databind.ObjectMapper">
+                        <property name="serializationInclusion" value="NON_NULL"/>
+                        <property name="dateFormat">
+                            <bean class="java.text.SimpleDateFormat">
+                                <constructor-arg type="java.lang.String" value="yyyy-MM-dd HH:mm:ss"/>
+                            </bean>
+                        </property>
+                    </bean>
+                </property>
+            </bean>
+        </mvc:message-converters>
+    </mvc:annotation-driven>
+
+
+    <mvc:default-servlet-handler/>
+
+    <!-- 扫描包 -->
+    <context:component-scan base-package="com.ccit.web.controller"/>
+
+    <bean id="contentNegotiationManager" class="org.springframework.web.accept.ContentNegotiationManagerFactoryBean">
+        <!-- 根据URL中的文件扩展名确定MIME（如userList.xml,userList.json） -->
+        <property name="favorPathExtension" value="false"/>
+        <!-- 则根据请求参数的值确定MIME类型，默认的请求参数是format，可以通过parameterName属性指定一个自定义的参数  -->
+        <property name="favorParameter" value="false"/>
+        <!-- 则采用Accept请求报文头的值确定MIME类型。由于不同的浏览器产生的Accept头都是不一样的，所以一般不建议采用Accept确定MIME类型 -->
+        <property name="ignoreAcceptHeader" value="false"/>
+        <property name="useJaf" value="false"/>
+        <property name="defaultContentType" value="application/json"/>
+        <property name="mediaTypes">
+            <map>
+                <entry key="json" value="application/json"/>
+            </map>
+        </property>
+    </bean>
+
+    <bean class="org.springframework.web.servlet.view.ContentNegotiatingViewResolver">
+        <property name="order" value="1"/>
+        <property name="contentNegotiationManager" ref="contentNegotiationManager"/>
+        <property name="viewResolvers">
+            <list>
+                <bean class="org.springframework.web.servlet.view.BeanNameViewResolver"/>
+            </list>
+        </property>
+
+        <property name="defaultViews">
+            <list>
+                <!-- for application/json -->
+                <bean class="org.springframework.web.servlet.view.json.MappingJackson2JsonView">
+                    <property name="extractValueFromSingleKeyModel" value="true"/>
+                    <property name="objectMapper">
+                        <bean class="com.fasterxml.jackson.databind.ObjectMapper">
+                            <property name="dateFormat">
+                                <bean class="java.text.SimpleDateFormat">
+                                    <constructor-arg type="java.lang.String" value="yyyy-MM-dd HH:mm:ss"/>
+                                </bean>
+                            </property>
+                            <property name="serializationInclusion" value="NON_NULL"/>
+                        </bean>
+                    </property>
+                </bean>
+            </list>
+        </property>
+    </bean>
+
+    <!-- SpringMVC上传文件时，需要配置MultipartResolver处理器 -->
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+        <property name="defaultEncoding" value="UTF-8"/>
+        <property name="uploadTempDir" value = "/Users/7x-networks/cc/tempDir"></property>
+        <!-- 指定所上传文件的总大小不能超过200KB。注意maxUploadSize属性的限制不是针对单个文件，而是所有文件的容量之和 -->
+        <property name="maxUploadSize" value="1024000000"/>
+
+    </bean>
+
+</beans>

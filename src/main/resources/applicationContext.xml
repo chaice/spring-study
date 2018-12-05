@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:task="http://www.springframework.org/schema/task"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:oauth2="http://www.springframework.org/schema/security/oauth2"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xmlns:cache="http://www.springframework.org/schema/cache"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd
+        http://www.springframework.org/schema/tx
+        http://www.springframework.org/schema/tx/spring-tx.xsd
+        http://www.springframework.org/schema/mvc
+        http://www.springframework.org/schema/mvc/spring-mvc.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd
+        http://www.springframework.org/schema/task
+        http://www.springframework.org/schema/task/spring-task.xsd
+        http://www.springframework.org/schema/util
+        http://www.springframework.org/schema/util/spring-util.xsd
+        http://www.springframework.org/schema/security
+        http://www.springframework.org/schema/security/spring-security.xsd
+        http://www.springframework.org/schema/security/oauth2
+        http://www.springframework.org/schema/security/spring-security-oauth2.xsd
+        http://www.springframework.org/schema/cache
+        http://www.springframework.org/schema/cache/spring-cache.xsd">
+
+    <context:annotation-config></context:annotation-config>
+    <context:component-scan base-package="com"></context:component-scan>
+
+
+    <task:annotation-driven scheduler="qbScheduler" mode="proxy"/>
+    <task:scheduler id="qbScheduler" pool-size="16"/>
+
+    <!-- 启用Spring Cache -->
+    <cache:annotation-driven/>
+    <bean id="cacheManager" class="org.springframework.cache.concurrent.ConcurrentMapCacheManager"/>
+
+    <bean id="gson" class="com.ccit.util.MyGsonFactory" factory-method="buildGson"/>
+
+    <!-- 引入properties文件 -->
+    <context:property-placeholder location="classpath:jdbcConfig.properties"/>
+    <!-- 定义数据库连接池数据源bean destroy-method="close"的作用是当数据库连接不使用的时候,就把该连接重新放到数据池中,方便下次使用调用 -->
+    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <property name="driverClassName" value="${jdbc.driver}"/>
+        <property name="url" value="${jdbc.url}"/>
+        <property name="username" value="${jdbc.username}"/>
+        <property name="password" value="${jdbc.password}"/>
+        <property name="initialSize" value="8"/>
+        <property name="maxActive" value="128"/>
+        <property name="minIdle" value="4"/>
+        <property name="maxWait" value="30000"/>
+        <property name="testWhileIdle" value="true"/>
+        <property name="validationQuery" value="SELECT 1"/>
+        <property name="timeBetweenEvictionRunsMillis" value="30000"/>
+        <property name="minEvictableIdleTimeMillis" value="60000"/>
+        <property name="removeAbandoned" value="true"/>
+        <property name="removeAbandonedTimeout" value="3600"/>
+    </bean>
+
+    <!-- 配置sessionFactory -->
+    <bean id="sessionFactory"
+          class="org.springframework.orm.hibernate4.LocalSessionFactoryBean">
+        <!-- 数据源 -->
+        <property name="dataSource" ref="dataSource"/>
+
+        <!-- hibernate的相关属性配置 -->
+        <property name="hibernateProperties">
+            <value>
+                <!-- 设置数据库方言 -->
+                hibernate.dialect=org.hibernate.dialect.MySQLDialect
+                <!-- 设置自动创建|更新|验证数据库表结构 -->
+                hibernate.hbm2ddl.auto=none
+                <!-- 是否在控制台显示sql -->
+                hibernate.show_sql=false
+                <!-- 是否格式化sql，优化显示 -->
+                hibernate.format_sql=true
+                <!-- 是否开启二级缓存 -->
+                hibernate.cache.use_second_level_cache=true
+                <!-- 是否开启查询缓存 -->
+                hibernate.cache.use_query_cache=true
+                <!-- 二级缓存插件：org.hibernate.cache.EhCacheProvider -->
+                hibernate.cache.provider_class=net.sf.ehcache.hibernate.EhCacheProvider
+                hibernate.cache.region.factory_class=org.hibernate.cache.ehcache.EhCacheRegionFactory
+                <!-- 数据库批量查询最大数 -->
+                hibernate.jdbc.fetch_size=50
+                <!-- 数据库批量更新、添加、删除操作最大数 -->
+                hibernate.jdbc.batch_size=50
+                <!-- 是否自动提交事务 -->
+                hibernate.connection.autocommit=false
+                <!-- 指定hibernate在何时释放JDBC连接 -->
+                hibernate.connection.release_mode=on_close
+                <!-- 创建session方式 hibernate4.x 的方式 -->
+                hibernate.current_session_context_class=org.springframework.orm.hibernate4.SpringSessionContext
+                <!-- javax.persistence.validation.mode默认情况下是auto的，就是说如果不设置的话它是会自动去你的classpath下面找一个bean-validation**包
+                    所以把它设置为none即可 -->
+                javax.persistence.validation.mode=none
+            </value>
+        </property>
+        <property name="packagesToScan" value="com.ccit.entity"/>
+    </bean>
+
+    <!-- 定义事务管理 -->
+    <bean id="transactionManager" class="org.springframework.orm.hibernate4.HibernateTransactionManager">
+        <property name="sessionFactory" ref="sessionFactory"/>
+        <property name="nestedTransactionAllowed" value="true"/>
+    </bean>
+
+    <tx:annotation-driven transaction-manager="transactionManager"/>
+
+    <bean id="serviceEntryServiceTaskExecutor" class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+        <!-- 线程池维护线程的最少数量 -->
+        <property name="corePoolSize" value="8"/>
+        <!-- 线程池维护线程所允许的空闲时间 -->
+        <property name="keepAliveSeconds" value="300"/>
+        <!-- 线程池维护线程的最大数量 -->
+        <property name="maxPoolSize" value="128"/>
+        <!-- 线程池所使用的缓冲队列 -->
+        <property name="queueCapacity" value="128"/>
+    </bean>
+
+    <mvc:annotation-driven/>
+    <mvc:interceptors>
+        <mvc:interceptor>
+            <mvc:mapping path="/**"/>
+            <mvc:exclude-mapping path="/html/**"/>
+            <mvc:exclude-mapping path="/image/**"/>
+            <mvc:exclude-mapping path="/js/**"/>
+            <mvc:exclude-mapping path="/styles/**"/>
+            <mvc:exclude-mapping path="/oauth/token/**"/>
+            <bean class="com.ccit.web.interceptor.UserInterceptor"/>
+        </mvc:interceptor>
+    </mvc:interceptors>
+
+    <security:http pattern="/html/**" security="none"/>
+    <security:http pattern="/image/**" security="none"/>
+    <security:http pattern="/js/**" security="none"/>
+    <security:http pattern="/styles/**" security="none"/>
+
+    <security:http pattern="/oauth/token" create-session="stateless"
+                   authentication-manager-ref="oauth2AuthenticationManager"
+                   entry-point-ref="oauth2AuthenticationEntryPoint">
+        <security:intercept-url pattern="/oauth/token" access="IS_AUTHENTICATED_FULLY"/>
+        <security:anonymous enabled="false"/>
+        <security:http-basic entry-point-ref="oauth2AuthenticationEntryPoint"/>
+        <security:custom-filter ref="clientCredentialsTokenEndpointFilter" before="BASIC_AUTH_FILTER"/>
+        <security:custom-filter ref="webMvcCorsFilter" after="PRE_AUTH_FILTER"/>
+        <security:access-denied-handler ref="oauth2AccessDeniedHandler"/>
+    </security:http>
+
+    <bean id="clientDetailsService"
+          class="org.springframework.security.oauth2.provider.client.JdbcClientDetailsService">
+        <constructor-arg index="0" ref="dataSource"/>
+    </bean>
+
+    <bean id="oauth2ClientDetailsUserService"
+          class="org.springframework.security.oauth2.provider.client.ClientDetailsUserDetailsService">
+        <constructor-arg ref="clientDetailsService"/>
+    </bean>
+    <security:authentication-manager id="oauth2AuthenticationManager">
+        <security:authentication-provider user-service-ref="oauth2ClientDetailsUserService"/>
+    </security:authentication-manager>
+
+    <!--
+    <bean id="tokenStore" class="org.springframework.security.oauth2.provider.token.store.JdbcTokenStore">
+        <constructor-arg index="0" ref="dataSource"/>
+    </bean>
+    -->
+
+    <bean id="tokenStore" class="org.springframework.security.oauth2.provider.token.store.InMemoryTokenStore"/>
+
+    <bean id="tokenServices" class="org.springframework.security.oauth2.provider.token.DefaultTokenServices">
+        <property name="accessTokenValiditySeconds" value="3600"/>
+        <property name="tokenStore" ref="tokenStore"/>
+        <property name="supportRefreshToken" value="true"/>
+    </bean>
+    <bean id="oauth2AuthenticationEntryPoint"
+          class="org.springframework.security.oauth2.provider.error.OAuth2AuthenticationEntryPoint"/>
+    <bean id="oauth2AccessDeniedHandler"
+          class="org.springframework.security.oauth2.provider.error.OAuth2AccessDeniedHandler"/>
+    <bean id="oauthUserApprovalHandler"
+          class="org.springframework.security.oauth2.provider.approval.DefaultUserApprovalHandler"/>
+
+    <bean id="roleHierarchy"
+          class="org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl">
+        <property name="hierarchy">
+            <value>
+                ROLE_ADMIN > ROLE_MANAGER
+                ROLE_MANAGER > ROLE_USER
+            </value>
+        </property>
+    </bean>
+
+    <bean id="oauth2AccessDecisionManager" class="org.springframework.security.access.vote.UnanimousBased">
+        <constructor-arg>
+            <list>
+                <bean class="org.springframework.security.oauth2.provider.vote.ScopeVoter"/>
+                <bean class="org.springframework.security.access.vote.RoleHierarchyVoter">
+                    <constructor-arg ref="roleHierarchy"/>
+                </bean>
+                <!--
+                <bean class="org.springframework.security.access.vote.RoleVoter"/>
+                -->
+                <bean class="org.springframework.security.access.vote.AuthenticatedVoter"/>
+            </list>
+        </constructor-arg>
+    </bean>
+    <oauth2:authorization-server client-details-service-ref="clientDetailsService" token-services-ref="tokenServices"
+                                 user-approval-handler-ref="oauthUserApprovalHandler">
+        <oauth2:authorization-code/>
+        <oauth2:implicit/>
+        <oauth2:refresh-token/>
+        <!--
+        <oauth2:client-credentials/>
+        -->
+        <oauth2:password/>
+    </oauth2:authorization-server>
+    <bean id="clientCredentialsTokenEndpointFilter"
+          class="org.springframework.security.oauth2.provider.client.ClientCredentialsTokenEndpointFilter">
+        <property name="authenticationManager" ref="oauth2AuthenticationManager"/>
+    </bean>
+    <oauth2:resource-server id="userResourceServer" resource-id="user-resource" token-services-ref="tokenServices"/>
+
+    <security:http pattern="/**" create-session="never" entry-point-ref="oauth2AuthenticationEntryPoint"
+                   access-decision-manager-ref="oauth2AccessDecisionManager">
+        <security:anonymous enabled="false"/>
+        <!--
+        <security:intercept-url pattern="/**" access="ROLE_USER" requires-channel="https" />
+        -->
+        <security:intercept-url pattern="/**" access="ROLE_ADMIN" method="PUT"/>
+        <security:intercept-url pattern="/**" access="ROLE_ADMIN" method="POST"/>
+        <security:intercept-url pattern="/**" access="ROLE_ADMIN" method="DELETE"/>
+        <security:intercept-url pattern="/**" access="ROLE_USER" method="GET"/>
+        <security:custom-filter ref="userResourceServer" before="PRE_AUTH_FILTER"/>
+        <security:custom-filter ref="webMvcCorsFilter" before="HEADERS_FILTER"/>
+        <security:access-denied-handler ref="oauth2AccessDeniedHandler"/>
+    </security:http>
+
+    <bean id="md5PasswordEncoder" class="org.springframework.security.authentication.encoding.Md5PasswordEncoder"/>
+
+    <security:authentication-manager alias="authenticationManager">
+        <security:authentication-provider>
+            <security:password-encoder ref="md5PasswordEncoder">
+                <security:salt-source user-property="username"/>
+            </security:password-encoder>
+            <security:jdbc-user-service id="jdbcUserService"
+                                        data-source-ref="dataSource"
+                                        users-by-username-query="select user_name, user_password, is_enable from security_user where user_name=?"
+                                        authorities-by-username-query="select u.user_name, r.role_name from security_user as u, security_role as r where u.user_name=? and u.role_id = r.id"
+            />
+        </security:authentication-provider>
+    </security:authentication-manager>
+</beans>
